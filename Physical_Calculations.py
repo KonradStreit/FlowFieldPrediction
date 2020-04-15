@@ -7,7 +7,30 @@ Created on Mon Apr 13 13:23:05 2020
 import numpy as np
 
 
-def Gradient(field, direction, d=1):  # TODO use known boundary conditions?
+def Gradient(field, direction, d=1):
+    """
+    Calculates the first derivative on a discrete grid using central
+    difference inside and one-sided difference at the boundaries
+
+    Parameters
+    ----------
+    field : NxM array
+        function values at grid points, with (N, 0) being closest to the
+        origin and (0, M) being the point furthest away
+    direction : scalar, 0 or 1
+        Direction in which to take the derivative, with 0 being in y and
+        1 in x
+    d : scalar value, optional
+        Grid spacing in the direction of the derivative. The default is 1.
+
+    Returns
+    -------
+    gradient : NxM array
+        Field of the derivative values on each grid point.
+
+    """
+    
+
     size = field.shape
     gradient = np.zeros(size)
     if direction == 0:
@@ -27,20 +50,54 @@ def Gradient(field, direction, d=1):  # TODO use known boundary conditions?
     return gradient
 
 
-def Continuity(gradient1, gradient2):
-    if not np.shape(gradient1) == np.shape(gradient2):
+def Continuity(dudx, dvdy):
+    """
+    Calculation of the continuity error in a flow field
+
+    Parameters
+    ----------
+    dudx : NxM array
+        Derivative of u in x on each grid point.
+    dvdy : NxM array
+        Derivative of v in y on each grid point.
+
+    Returns
+    -------
+    error : NxM array
+        Continuity error on each grid point
+
+    """
+    if not np.shape(dudx) == np.shape(dvdy):
         print('Fields have different sizes')
         return None
     else:
-        n = len(gradient1)
+        n = len(dudx)
         error = np.zeros([n, n])
         for i in range(n):
             for j in range(n):
-                error[i, j] = gradient1[i, j] + gradient2[i, j]
+                error[i, j] = dudx[i, j] + dvdy[i, j]
     return error
 
 
 def Momentum(vort, u, v):
+    """
+    Calculation of the momentum error in a flow field
+
+    Parameters
+    ----------
+    vort : NxM array
+        Vorticity value on each grid point.
+    u : NxM array
+        u-velocity value on each grid point.
+    v : NxM array
+        v-velocity value on each grid point.
+
+    Returns
+    -------
+    error: NxM array
+        Momentum error on each grid point.
+
+    """
     nu = 1.05e-6
     if not (np.shape(vort) == np.shape(u) and np.shape(vort) == np.shape(v)):
         print('Shape mismatch')
@@ -51,13 +108,12 @@ def Momentum(vort, u, v):
         vortx2 = Gradient(vort, 1, 1)
         vortxx1 = Gradient(vortx1, 0, 1)
         vortxx2 = Gradient(vortx2, 1, 1)
-        eps = np.zeros_like(vort)
+        error = np.zeros_like(vort)
         for i in range(s[0]):
             for j in range(s[1]):
-                eps[i, j] = u[i, j] * vortx1[i, j] + v[i, j]*vortx2[i, j] \
+                error[i, j] = u[i, j] * vortx1[i, j] + v[i, j]*vortx2[i, j] \
                     - nu*(vortxx1[i, j]+vortxx2[i, j])
-    # error = np.sum(vort)
-    return eps
+    return error
 
 
 def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
