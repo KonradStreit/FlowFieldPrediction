@@ -34,17 +34,17 @@ def Gradient(field, direction, d=1):
     size = field.shape
     gradient = np.zeros(size)
     if direction == 0:
-        for i in range(1, size[0]-1):
-            for j in range(0, size[1]):
-                gradient[i, j] = (field[i+1, j] - field[i-1, j]) / (2*d)
-                gradient[0, j] = (field[1, j] - field[0, j]) / (d)
-                gradient[-1, j] = (field[-1, j] - field[-2, j]) / (d)
-    elif direction == 1:
         for i in range(0, size[0]):
             for j in range(1, size[1]-1):
-                gradient[i, j] = (field[i, j-1] - field[i, j+1]) / (2*d)
-            gradient[i, 0] = (field[i, 0] - field[i, 1]) / d
-            gradient[i, -1] = (field[i, -2] - field[i, -1]) / d
+                gradient[i, j] = (field[i, j+1] - field[i, j-1]) / (2*d)
+                gradient[i, 0] = (field[i, 1] - field[i, 0]) / (d)
+                gradient[i, -1] = (field[i, -1] - field[i, -2]) / (d)
+    elif direction == 1:
+        for i in range(1, size[0]-1):
+            for j in range(0, size[1]):
+                gradient[i, j] = (field[i-1, j] - field[i+1, j]) / (2*d)
+                gradient[0, j] = (field[0, j] - field[1, j]) / d
+                gradient[-1, j] = (field[-2, j] - field[-1, j]) / d
     else:
         print('Invalid Direction')
     return gradient
@@ -182,7 +182,7 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
         g[i] += v_left*2
         # Right Boundary
         g[-(i+1)] -= v_right*2
-    # print(g)
+    print(g)
     # Sum Vorticities and BCs
     b = vort.reshape(size[0]*size[1], order='F')*h**2 + g*h
     # plt.imshow(A)
@@ -190,5 +190,5 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     Psi = np.linalg.solve(A, b)
     # Reshape Psi to original shape of vorticity field
     # print(Psi)
-    Psi = Psi.reshape(size)
+    Psi = Psi.reshape(size, order='F')
     return Psi
