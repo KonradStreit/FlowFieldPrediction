@@ -50,9 +50,9 @@ def Gradient(field, direction, d=1):
     return gradient
 
 
-def Continuity(dudx, dvdy):
+def Continuity(u, v):
     """
-    Calculation of the continuity error in a flow field
+    Calculation of the continuity error in a 2D flow field
 
     Parameters
     ----------
@@ -67,10 +67,12 @@ def Continuity(dudx, dvdy):
         Continuity error on each grid point
 
     """
-    if not np.shape(dudx) == np.shape(dvdy):
+    if not u.shape == v.shape:
         print('Fields have different sizes')
         return None
     else:
+        dudx = Gradient(u, 0)
+        dvdy = Gradient(v, 1)
         n = len(dudx)
         error = np.zeros([n, n])
         for i in range(n):
@@ -81,7 +83,7 @@ def Continuity(dudx, dvdy):
 
 def Momentum(vort, u, v):
     """
-    Calculation of the momentum error in a flow field
+    Calculation of the momentum error in a 2D flow field
 
     Parameters
     ----------
@@ -190,4 +192,6 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     # Reshape Psi to original shape of vorticity field
     # print(Psi)
     Psi = Psi.reshape(size, order='F')
-    return Psi
+    u = Gradient(Psi, 1)
+    v = -Gradient(Psi, 0)
+    return u, v
