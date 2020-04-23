@@ -7,7 +7,6 @@ Created on Sun Mar 22 13:19:10 2020
 
 import numpy as np
 import pylab as pl
-import ot
 import matplotlib.pyplot as plt
 import scipy as sp
 import Physical_Calculations as PC
@@ -23,7 +22,15 @@ v_right = 0
 Psi = PC.solve_Poisson(vort, u_top, u_bot, v_left, v_right)
 u = PC.Gradient(Psi, 1)
 v = -PC.Gradient(Psi, 0)
-plt.imshow(u)
+
+# %%
+cm = 'Greys'
+plt.imshow(u, cmap=cm)
+plt.ylabel('y')
+plt.xlabel('x')
 plt.colorbar()
 plt.figure()
-plt.imshow(v)
+plt.imshow(v, cmap=cm)
+plt.colorbar()
+plt.ylabel('y')
+plt.xlabel('x')

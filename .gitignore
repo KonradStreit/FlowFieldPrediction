@@ -1,0 +1,3 @@
+# Ignore Spyder Project docs
+*.spyproject/
+/__pycache__

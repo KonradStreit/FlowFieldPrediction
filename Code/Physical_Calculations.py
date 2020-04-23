@@ -182,7 +182,6 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
         g[i] += v_left*2
         # Right Boundary
         g[-(i+1)] -= v_right*2
-    print(g)
     # Sum Vorticities and BCs
     b = vort.reshape(size[0]*size[1], order='F')*h**2 + g*h
     # plt.imshow(A)
