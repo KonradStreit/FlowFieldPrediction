@@ -12,14 +12,14 @@ import scipy as sp
 import Physical_Calculations as PC
 
 # Choose Flow to be modelled, 'Shear' or 'TGV'
-FlowType = 'Shear'
+FlowType = 'TGV'
 
 # Grid size
 nx = 20
 ny = 20
 
 Re = 1
-kappa = 2
+kappa = 1
 t = .1
 # %% Shear Flow
 if FlowType == 'Shear':
@@ -66,9 +66,33 @@ if FlowType == 'Shear':
         
 # %% Taylor Green Vortex
 if FlowType == 'TGV':
-    x = np.linspace(0, 2*np.pi, nx, endpoint=False)
-    y = np.linspace(0, 2*np.pi, ny, endpoint=False)
-    vort = 2* kappa * np.cos(kappa*x) * np.cos(kappa*y[:, np.newaxis]) * np.exp(-2*kappa**2*t/Re)
-    u, v = PC.solve_Poisson(vort, u_top, u_bot, v_left, v_right)
+    Ft = np.exp(-2*kappa**2*t/Re)
+    x, h = np.linspace(0, 2*np.pi, nx, retstep=True)
+    y = np.linspace(0, 2*np.pi, ny)
+    vort = -2* kappa * np.cos(kappa*x) * np.cos(kappa*y[:, np.newaxis])\
+        * Ft
+    u_top = np.cos(x) * np.sin(y[-1]) * Ft
+    u_bot = np.cos(x) * np.sin(y[0]) * Ft
+    v_left = -np.sin(x[0]) * np.cos(y) * Ft
+    v_right = -np.sin(x[-1]) * np.cos(y) * Ft
+    u, v = PC.solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=h)
     
-    plt.imshow(vort)
+    u_ana = np.zeros_like(u)
+    v_ana = np.zeros_like(v)
+    for i in range(ny):
+        for j in range(nx):
+            u_ana[i, j] = np.cos(x[j]) * np.sin(y[-(i+1)]) * Ft
+            v_ana[i, j] = -np.sin(x[j]) * np.cos(y[-(i+1)]) * Ft
+    plt.figure()
+    plt.imshow(u)
+    plt.title('u')
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(u_ana)
+    plt.title('Analytic')
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(u-u_ana)
+    plt.colorbar()

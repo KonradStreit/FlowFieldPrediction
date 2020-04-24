@@ -198,6 +198,6 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     # Reshape Psi to original shape of vorticity field
     # print(Psi)
     Psi = Psi.reshape(size, order='F')
-    u = Gradient(Psi, 1)
-    v = -Gradient(Psi, 0)
+    u = Gradient(Psi, 1, d=h)
+    v = -Gradient(Psi, 0, d=h)
     return u, v
