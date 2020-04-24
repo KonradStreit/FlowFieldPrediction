@@ -125,17 +125,23 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
 
     Parameters
     ----------
-    vort : Vorticity Field \n
-    u_top : u at top Boundary \n
-    u_bot : u at bottom Boundary \n
-    v_left : v at left Boundary \n
-    v_right : v at right boundary \n
+    vort : n x n array,
+            Vorticity Field \n
+    u_top : n x 1 vector
+            u at top Boundary \n
+    u_bot : n x 1 vector
+            u at bottom Boundary \n
+    v_left : n x 1 vector
+            v at left Boundary \n
+    v_right : n x 1 vector
+            v at right boundary \n
     h : scalar, optional
         Grid spacing. The default is 1.
 
     Returns
     -------
-    Psi : Field of Stream function values
+    u, v: n x n arrays
+            x and y velocity components
 
     """
     size = vort.shape
@@ -177,13 +183,13 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     g = np.zeros((size[0]**2))
     for i in range(size[0]):
         # Top Boundary, normal derivative of stream function = u_inf
-        g[i*size[0]] += u_top * 2
+        g[i*size[0]] += u_top[i] * 2
         # Bottom Boundary, as above but sign inverted
-        g[i*size[0]+size[0]-1] -= u_bot * 2
+        g[i*size[0]+size[0]-1] -= u_bot[i] * 2
         # Left Boundary
-        g[i] += v_left*2
+        g[i] += v_left[i]*2
         # Right Boundary
-        g[-(i+1)] -= v_right*2
+        g[-(i+1)] -= v_right[-(i+1)]*2
     # Sum Vorticities and BCs
     b = vort.reshape(size[0]*size[1], order='F')*h**2 + g*h
     # plt.imshow(A)
