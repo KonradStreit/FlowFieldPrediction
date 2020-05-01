@@ -119,6 +119,56 @@ def Momentum(vort, u, v):
 
 
 def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
+    size = vort.shape
+    # Building Matrix A for A*Psi = b
+    main_A = np.ones((size[0]**2, 1)) * 4  # Main Diagonal entries
+    off_Au = np.ones(((size[0]**2-1), 1)) * -1  # Off Diagonal entries - upper
+    off_Al = np.ones(((size[0]**2-1), 1)) * -1  # Off Diagonal entries - lower
+    for i in range(size[0]):    
+        off_Au[size[0]*i] *= 2
+        off_Al[-(size[0]*i+1)] *= 2
+        if i > 0:
+            off_Au[size[0]*i-1] = 0
+            off_Al[-(size[0]*i)] = 0
+    off_AI = np.ones((size[0]*(size[0]-1))) * -1  # Off Diag - Identity
+    #  Assemble B
+    A = np.diagflat(main_A, 0)
+    A += np.diagflat(off_Au, 1)
+    A += np.diagflat(off_Al, -1)
+    A += np.diagflat(off_AI, size[0])
+    A += np.diagflat(off_AI, -size[0])
+    for i in range(size[0]):
+        A[i, size[1]+i] *= 2
+        A[-(i+1), -(size[1]+1+i)] *= 2
+
+    # Build RHS
+    # g: BC's
+    g = np.zeros(size)
+    for i in range(size[0]):
+        # Left Boundary
+        g[i, 0] += v_left[i]*2
+        # Right Boundary
+        g[i, -1] -= v_right[i]*2
+    for j in range(size[1]):
+        # Top Boundary, normal derivative of stream function = u_inf
+        g[0, j] += u_top[j] * 2
+        # Bottom Boundary, as above but sign inverted
+        g[-1, j] -= u_bot[j] * 2
+
+    b = vort.reshape(size[0]*size[1], order='F')*h**2\
+        + g.reshape(size[0]*size[1], order='F')*h
+    # plt.imshow(A)
+    # Solve for Psi
+    Psi = np.linalg.solve(A, b)
+    # Reshape Psi to original shape of vorticity field
+    # print(Psi)
+    Psi = Psi.reshape(size, order='F')
+    grad = np.gradient(Psi, h)
+    u = -grad[0]
+    v = -grad[1]
+    return u, v, A
+
+def solve_Poisson_Cyl(vort, u_top, u_bot, v_left, v_right, radius,h=1):
     """
     
     
@@ -180,18 +230,29 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
         print('Not implemented for M < 4')
     # Build RHS
     # g: BC's
-    g = np.zeros((size[0]**2))
+    g = np.zeros(size)
     for i in range(size[0]):
-        # Top Boundary, normal derivative of stream function = u_inf
-        g[i*size[0]] += u_top[i] * 2
-        # Bottom Boundary, as above but sign inverted
-        g[i*size[0]+size[0]-1] -= u_bot[i] * 2
         # Left Boundary
-        g[i] += v_left[i]*2
+        g[i, 0] += v_left[i]*2
         # Right Boundary
-        g[-(i+1)] -= v_right[-(i+1)]*2
+        g[i, -1] -= v_right[i]*2
+    for j in range(size[1]):
+        # Top Boundary, normal derivative of stream function = u_inf
+        g[0, j] += u_top[j] * 2
+        # Bottom Boundary, as above but sign inverted
+        g[-1, j] -= u_bot[j] * 2
+
+    # BC's Cylinder
+    centre_2D = np.array((size[0] // 2, size[1] // 2))
+
+    # centre_1D = centre_2D[1]*size[0]+centre_2D[0]
+    # g[centre_1D-2] = 0
+    # g[centre_1D+2] = 0
+    # g[centre_1D-2*size[0]] = 0
+    # g[centre_1D+2*size[0]] = 0
     # Sum Vorticities and BCs
-    b = vort.reshape(size[0]*size[1], order='F')*h**2 + g*h
+    b = vort.reshape(size[0]*size[1], order='F')*h**2\
+        + g.reshape(size[0]*size[1], order='F')*h
     # plt.imshow(A)
     # Solve for Psi
     Psi = np.linalg.solve(A, b)
