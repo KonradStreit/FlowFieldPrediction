@@ -6,26 +6,32 @@ Created on Sun Mar 22 13:19:10 2020
 """
 
 import numpy as np
-import pylab as pl
+# import pylab as pl
 import matplotlib.pyplot as plt
 import scipy as sp
+# from scipy import linalg
 import Physical_Calculations as PC
+import time
 
-# Choose Flow to be modelled, 'Shear' or 'TGV'
+# import scipy.sparse as sparse
+# from scipy.sparse import linalg
+
+
+# Choose Flow to be modelled, 'Shear', 'TGV' or 'Plate'
 FlowType = 'TGV'
 
 # Grid size
-nx = 20
-ny = 20
+nx = 10
+ny = nx
 
 Re = 1
 kappa = 1
-t = .1
+t = 0
 # %% Shear Flow
 if FlowType == 'Shear':
     vort = np.ones((nx, ny))*-1
     # vort[2, 4] = -5
-    u_top = np.ones((nx, 1)) * 19
+    u_top = np.ones((nx, 1)) * (ny-1)
     u_bot = np.ones((nx, 1)) * 0
     v_left = np.ones((ny, 1)) * 0
     v_right = np.ones((ny, 1)) * 0
@@ -69,30 +75,139 @@ if FlowType == 'TGV':
     Ft = np.exp(-2*kappa**2*t/Re)
     x, h = np.linspace(0, 2*np.pi, nx, retstep=True)
     y = np.linspace(0, 2*np.pi, ny)
-    vort = -2* kappa * np.cos(kappa*x) * np.cos(kappa*y[:, np.newaxis])\
-        * Ft
-    u_top = np.cos(x) * np.sin(y[-1]) * Ft
-    u_bot = np.cos(x) * np.sin(y[0]) * Ft
-    v_left = -np.sin(x[0]) * np.cos(y) * Ft
-    v_right = -np.sin(x[-1]) * np.cos(y) * Ft
-    u, v = PC.solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=h)
+    # x = x[1:-1]
+    # y = y[1:-1]
     
-    u_ana = np.zeros_like(u)
-    v_ana = np.zeros_like(v)
+    u_ana = np.zeros((nx, ny))
+    v_ana = np.zeros_like(u_ana)
     for i in range(ny):
         for j in range(nx):
             u_ana[i, j] = np.cos(x[j]) * np.sin(y[-(i+1)]) * Ft
             v_ana[i, j] = -np.sin(x[j]) * np.cos(y[-(i+1)]) * Ft
-    plt.figure()
-    plt.imshow(u)
-    plt.title('u')
-    plt.colorbar()
+
+    vort = -2* kappa * np.cos(kappa*x) * np.cos(kappa*y[:, np.newaxis])\
+        * Ft
+    u_top = u_ana[0, :]
+    u_bot = u_ana[-1, :]
+    v_left = v_ana[:, 0]
+    v_right = v_ana[:, -1]
+    # start = time.time()
+    # u, v, A = PC.solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=h)
+    # t_dense = time.time()
+    # print('Time before: %.3f' %t_dense)
+    print('Times Sparse:')
+    start = time.time()
+    us, vs, As = PC.solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=h)
+    t_sparse = time.time() - start
+    print('Total Time sparse: %.3f' %t_sparse)
+    print('Times Banded:')
+    start = time.time()
+    ub, vb = PC.solve_Poisson_banded(vort, u_top, u_bot, v_left, v_right, h=h)
+    t_banded = time.time()-start
+    print('Total Time banded: %.3f' %t_banded) 
+    # %%
+    # plt.figure()
+    # plt.imshow(u-ub)
+    # plt.colorbar()
+    
+    # plt.figure()
+    # plt.imshow(ub)
+    # plt.colorbar()
+    
+    # plt.figure()
+    # plt.imshow(ub-u_ana)
+    # plt.colorbar()
+# %%
+
+    # b_ana =  A.dot(u_ana.reshape(nx**2))
+    # g_ana = b_ana - vort.reshape((nx**2))*h**2
+    # # vort_ana = PC.Gradient(v_ana, 0, h) - PC.Gradient(u_ana, 1, h)
+
+    # f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    # im_ga = ax1.imshow(u_ana.reshape((nx, ny)))
+    # f.colorbar(im_ga, ax=ax1)
+    # ax1.set_title('Analytic')
+    # im_g = ax2.imshow(u.reshape((nx, ny)))
+    # f.colorbar(im_g, ax=ax2)
+    # ax2.set_title('Discrete')
+    
+    # plt.figure()
+    # plt.imshow((u-u_ana)**2)
+    # plt.colorbar()
+    
+    # f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    # ax1.plot(u[0, :])
+    # ax2.plot(u_ana[0, :])
+
+    # # f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    # # im_va = ax1.imshow(vort_ana)
+    # # ax1.set_title('Analytic')
+    # # f.colorbar(im_va, ax=ax1)
+    # # im_v = ax2.imshow(vort)
+    # # f.colorbar(im_v, ax=ax2)
+    # # ax2.set_title('Discrete')
+    
+    # # plt.figure()
+    # # plt.imshow(vort-vort_ana)
+    # # plt.colorbar()
+    
+    
+    # # %%
+    # cm = 'Greys'
+
+    # plt.figure()
+    # plt.imshow(u, cmap=cm)
+    # plt.title('u')
+    # plt.colorbar()
+    
+    # plt.figure()
+    # plt.imshow(u_ana, cmap=cm)
+    # plt.title('u Analytic')
+    # plt.colorbar()
+    
+    # plt.figure()
+    # plt.imshow(u-u_ana, cmap=cm)
+    # plt.title('u-error')
+    # plt.colorbar()
+    
+    # plt.figure()
+    # plt.imshow(v-v_ana, cmap=cm)
+    # plt.title('v-error')
+    # plt.colorbar()
+    
+    # #  Boundary Condition? Error on boundary zero
+    # #  Poisson check matrix multiplication with correct matrix
+    # # CHeck Continuity & Momentum
+    # # Turn the source term near the body
+    # # Implement distance function for circular arc
+    # # Apply on-off switch - turn off source trm very close and then smoothly ramp between
+    # linpack
+    # LU-decomposition when in same geometry?
+
+
+# %% Immersed Plate at 10<y<20
+if FlowType == 'Plate':
+    radius = 5
+    
+    vort = np.ones((nx, ny))*1
+    centre_2D = np.array((vort.shape[0] // 2, vort.shape[1] // 2))
+    for i in range(radius):
+        for j in range(radius):
+            if np.sqrt(i**2 + j**2) < radius:
+                vort[centre_2D[0]+i, centre_2D[1]+j] = 0
+                vort[centre_2D[0]+i, centre_2D[1]-j] = 0
+                vort[centre_2D[0]-i, centre_2D[1]-j] = 0
+                vort[centre_2D[0]-i, centre_2D[1]+j] = 0
+                
+    u_top = np.ones((nx, 1)) * 5
+    u_bot = np.ones((nx, 1)) * 5
+    v_left = np.ones((ny, 1)) * 0
+    v_right = np.ones((ny, 1)) * 0
+    u, v = PC.solve_Poisson_Cyl(vort, u_top, u_bot, v_left, v_right, radius, h=1)
+    
+    cm = 'Greys'
+    
+    plt.imshow(u, cmap=cm)
     
     plt.figure()
-    plt.imshow(u_ana)
-    plt.title('Analytic')
-    plt.colorbar()
-    
-    plt.figure()
-    plt.imshow(u-u_ana)
-    plt.colorbar()
+    plt.imshow(v, cmap=cm)
