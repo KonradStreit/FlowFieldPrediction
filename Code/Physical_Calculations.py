@@ -181,9 +181,10 @@ def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     return u, v, A
 
 
-def solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=1):
+def solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=1, timeit=False):
     size = vort.shape
-    start = time.time()
+    if timeit:
+        start = time.time()
     # Building Matrix A for A*Psi = b
     main_A = np.ones((size[0]**2, )) * 4  # Main Diagonal entries
     off_Au = np.ones(((size[0]**2-1), )) * -1  # Off Diagonal entries - upper
@@ -201,11 +202,13 @@ def solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=1):
     #  Assemble A
     A = sparse.diags([main_A, off_Au, off_Al, off_AIu, off_AIl],
                      [0, 1, -1, size[0], -size[0]], format="csr")
-    end = time.time()
-    print('Build sparse Matrix: %.3f' %(end-start))
+    if timeit:
+        end = time.time()
+        print('Build sparse Matrix: %.3f' %(end-start))
     # Build RHS
     # g: BC's
-    start = time.time()
+    if timeit:
+        start = time.time()
     g = np.zeros(size)
     for i in range(size[0]):
         # Left Boundary
@@ -220,21 +223,24 @@ def solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=1):
 
     b = vort.reshape(size[0]*size[1], order='F')*h**2\
         + g.reshape(size[0]*size[1], order='F')*h
-    end = time.time()
-    print('Build Source: %.3f' %(end-start))
+    if timeit:
+        end = time.time()
+        print('Build Source: %.3f' %(end-start))
     # plt.imshow(A)
     # Solve for Psi
-    start = time.time()
+    if timeit:
+        start = time.time()
     Psi = sparse.linalg.spsolve(A, b)
-    end = time.time()
-    print('Sparse Solver: %.3f' %(end-start))
+    if timeit:
+        end = time.time()
+        print('Sparse Solver: %.3f' %(end-start))
     # Reshape Psi to original shape of vorticity field
     # print(Psi)
     Psi = Psi.reshape(size, order='F')
     grad = np.gradient(Psi, h)
     u = -grad[0]
     v = -grad[1]
-    return u, v, A
+    return u, v, Psi
 
 def solve_Poisson_banded(vort, u_top, u_bot, v_left, v_right, h=1):
     if not vort.shape[0] == vort.shape[1]:
