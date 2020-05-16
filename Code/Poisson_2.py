@@ -13,12 +13,12 @@ import scipy as sp
 import Physical_Calculations as PC
 import time
 
-# import scipy.sparse as sparse
-# from scipy.sparse import linalg
+import scipy.sparse as sparse
+from scipy.sparse import linalg
 
 
 # Choose Flow to be modelled, 'Shear', 'TGV', 'TGV_compare' or 'Body'
-FlowType = 'Body'
+FlowType = 'TGV'
 
 # Grid size
 nx = 100
@@ -92,7 +92,13 @@ if FlowType == 'TGV':
     u_bot = u_ana[-1, :]
     v_left = v_ana[:, 0]
     v_right = v_ana[:, -1]
-    u, v, Psi = PC.solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=h)
+    u, v, Psi = PC.solve_Poisson_periodic(vort, u_top, u_bot, v_left, v_right,
+                                          h=h, periodic=True)
+
+
+
+
+
 
 # %%
 

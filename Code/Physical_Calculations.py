@@ -242,6 +242,85 @@ def solve_Poisson_sparse(vort, u_top, u_bot, v_left, v_right, h=1, timeit=False)
     v = -grad[1]
     return u, v, Psi
 
+
+def solve_Poisson_periodic(vort, u_top, u_bot, v_left, v_right, h=1,
+                           periodic=False, timeit=False):
+    size = vort.shape
+    if timeit:
+        start = time.time()
+    # Building Matrix A for A*Psi = b
+    main_A = np.ones((size[0]**2, )) * 4  # Main Diagonal entries
+    off_Au = np.ones(((size[0]**2-1), )) * -1  # Off Diagonal entries - upper
+    off_Al = np.ones(((size[0]**2-1), )) * -1  # Off Diagonal entries - lower
+    off_AIu = np.ones((size[0]*(size[0]-1))) * -1  # Off Diag - Identity - upper
+    off_AIl = np.ones((size[0]*(size[0]-1))) * -1  # Off Diag - Identity - lower
+    for i in range(size[0]):    
+        off_Au[size[0]*i] *= 2
+        off_Al[-(size[0]*i+1)] *= 2
+        off_AIu[i] *= 2
+        off_AIl[-(i+1)] *= 2
+        if i > 0:
+            off_Au[size[0]*i-1] = 0
+            off_Al[-(size[0]*i)] = 0
+    #  Assemble A
+    A = sparse.diags([main_A, off_Au, off_Al, off_AIu, off_AIl],
+                     [0, 1, -1, size[0], -size[0]], format="csr")
+    if timeit:
+        end = time.time()
+        print('Build sparse Matrix: %.3f' %(end-start))
+    # Build RHS
+    # g: BC's
+    if timeit:
+        start = time.time()
+    g = np.zeros(size)
+    for i in range(size[0]):
+        # Left Boundary
+        g[i, 0] += v_left[i]*2
+        # Right Boundary
+        g[i, -1] -= v_right[i]*2
+    for j in range(size[1]):
+        # Top Boundary, normal derivative of stream function = u_inf
+        g[0, j] += u_top[j] * 2
+        # Bottom Boundary, as above but sign inverted
+        g[-1, j] -= u_bot[j] * 2
+
+    b = vort.reshape(size[0]*size[1], order='F')*h**2\
+        + g.reshape(size[0]*size[1], order='F')*h
+    if timeit:
+        end = time.time()
+        print('Build Source: %.3f' %(end-start))
+    # plt.imshow(A)
+    # Solve for Psi
+    if timeit:
+        start = time.time()
+    Psi = sparse.linalg.spsolve(A, b)
+    if timeit:
+        end = time.time()
+        print('Sparse Solver: %.3f' %(end-start))
+    # Reshape Psi to original shape of vorticity field
+    # print(Psi)
+    Psi = Psi.reshape(size, order='F')
+    
+    if not periodic:
+        grad = np.gradient(Psi, h)
+        u = -grad[0]
+        v = -grad[1]
+        return u, v, Psi
+    else:
+        temp = np.zeros((size[0]+2, size[0]+2))
+        temp[1:-1, 1:-1] = Psi
+        for i, right in enumerate(Psi[:, -2]):
+            temp[i+1, 0] = right
+            temp[i+1, -1] = Psi[i, 1]
+        for i, bot in enumerate(temp[-3, :]):
+            temp[0, i] = bot
+            temp[-1, i] = temp[2, i]
+        grad = np.gradient(temp, h)
+        u = -grad[0][1:-1, 1:-1]
+        v = -grad[1][1:-1, 1:-1]
+        return u, v, Psi
+
+
 def solve_Poisson_banded(vort, u_top, u_bot, v_left, v_right, h=1):
     if not vort.shape[0] == vort.shape[1]:
         print('Non-square')
