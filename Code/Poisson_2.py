@@ -96,10 +96,6 @@ if FlowType == 'TGV':
                                           h=h, periodic=True)
 
 
-
-
-
-
 # %%
 
     # b_ana =  A.dot(u_ana.reshape(nx**2))
