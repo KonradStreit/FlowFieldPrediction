@@ -1,11 +1,8 @@
 # FlowFieldPrediction
  Code accompanying the Master Thesis
 
-Branch for Work in Progress
-
 Folder Code:
- 	2D_Shape.py:
-		Code to generate 2D-shape interpolation plot
+ 	
   	Physical_Calculations.py:
     		Functions:
       		Gradient: FD-gradient calculation on 2D grid
