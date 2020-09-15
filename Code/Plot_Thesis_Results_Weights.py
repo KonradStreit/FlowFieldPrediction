@@ -29,7 +29,7 @@ def exvelo_base(xt, yt, ut, vt):
 
 # %%Setup 
 AoA = (0, 10, 20)
-n_weights = 31
+n_weights = 11
 
 temp = np.linspace(0., 1, n_weights)
 weights = np.vstack((temp, 1-temp)).transpose()
@@ -91,7 +91,7 @@ for i, w in enumerate(weights):
     
     gamma_OT = Arc.solve_gamma(exvelo_OT)
     
-    u_OT_vl, v_OT_vl = Arc.velocity_ext(gamma_OT, x, y)
+    u_OT_vl, v_OT_vl = Arc.velocity(gamma_OT, x, y)
     
     
     u_OT_tot = u_OT_vort - u_OT_vl + 1
@@ -107,13 +107,13 @@ for i, w in enumerate(weights):
 
     # %% Calculate Velocities
     
-    mask_vort = abs(vort_lin) > vort_thr*np.mean(abs(vort_lin))
+    mask_vort = abs(vort_lin) > vort_thr*np.max(abs(vort_lin))
     u_lin_vort, v_lin_vort = PC.u_omega(x, y, x[mask_vort], y[mask_vort],
                                         vort_lin[mask_vort], h=step)
     
     exvelo_lin = lambda xl, yl: exvelo_base(xl, yl, u_lin_vort+1, v_lin_vort)
     gamma_lin = Arc.solve_gamma(exvelo_lin)
-    u_lin_vl, v_lin_vl = Arc.velocity_ext(gamma_lin, x, y)
+    u_lin_vl, v_lin_vl = Arc.velocity(gamma_lin, x, y)
     
     u_lin_tot = u_lin_vort - u_lin_vl + 1
     v_lin_tot = v_lin_vort - v_lin_vl
@@ -171,3 +171,4 @@ ax.legend()
 
 ax.set_xlabel("Weight {:.0f}° Sim".format(AoA[0]))
 ax.set_ylabel("Momentum Error")
+
