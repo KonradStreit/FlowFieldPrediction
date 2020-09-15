@@ -214,7 +214,39 @@ def Vorticity(u, v, dx, dy):
 
 
 # %% Pressure
-def Pressure(x, y, u, v, x_arc, y_arc, step=1, rho=1, nu=128/150):
+def Pressure(x, y, u, v, x_body, y_body, step=1, rho=1, nu=128/150):
+    """
+    Calculates the pressure field from the velocity field. To avoid problems
+    with the velocity inside the body, the integration is carried out always
+    only up to the body. 
+
+    Parameters
+    ----------
+    x : 2D-Array
+        x-Coordinates.
+    y : 2D-Array
+        x-Coordinates.
+    u : 2D-Array
+        Velocity x-component.
+    v : 2D-Array
+        Velocity x-component.
+    x_body : 1D-Array
+        x-coordinates of body.
+    y_body : 1D-Array
+        y-coordinates of body.
+    step : int, optional
+        Step size on grid. The default is 1.
+    rho : float, optional
+        Density. The default is 1.
+    nu : float, optional
+        Viscosity. The default is 128/150.
+
+    Returns
+    -------
+    p : 2D-Array
+        Pressure field.
+
+    """
     dudx = np.gradient(u, step, axis=1)
     dudy = np.gradient(u, step, axis=0)
     
@@ -232,7 +264,7 @@ def Pressure(x, y, u, v, x_arc, y_arc, step=1, rho=1, nu=128/150):
     p = np.empty_like(x)
     p[:, 0] = step * dpdx[:, 0]
     i = 1
-    while (x[0, i] < np.min(x_arc)) and i < len(x):
+    while (x[0, i] < np.min(x_body)) and i < len(x):
         p[:, i] = p[:, i-1] + step * dpdx[:, i]
         i += 1
     
@@ -241,17 +273,17 @@ def Pressure(x, y, u, v, x_arc, y_arc, step=1, rho=1, nu=128/150):
         p[-1, k] = p[-1, k-1] + step * dpdx[-1, k]
     
     k = 1
-    while (y[k, 0] < np.min(y_arc)) and k < len(x):
+    while (y[k, 0] < np.min(y_body)) and k < len(x):
         p[k, :] = p[k-1, :] + step * dpdy[k, :]
         k += 1
         
     l = len(x)-2
-    while (y[l, 0] > np.max(y_arc)) and l > 0:
+    while (y[l, 0] > np.max(y_body)) and l > 0:
         p[l, :] = p[l+1, :] - step * dpdy[l, :]
         l -= 1
     
-    while x[0, i] <= np.max(x_arc):
-        yl = np.interp(x[0, i], x_arc, y_arc)
+    while x[0, i] <= np.max(x_body):
+        yl = np.interp(x[0, i], x_body, y_body)
         ind = abs(yl - y[:, 0]).argmin()
         for m in range(k, ind):
             p[m, i] = p[m-1, i] + step * dpdy[k, i]
@@ -260,7 +292,7 @@ def Pressure(x, y, u, v, x_arc, y_arc, step=1, rho=1, nu=128/150):
         
         i += 1
     
-    yl = np.interp(x[0, i], x_arc, y_arc)
+    yl = np.interp(x[0, i], x_body, y_body)
     ind = abs(yl - y[:, 0]).argmin()
     for m in range(k, ind):
         p[m, i] = p[m-1, i] + step * dpdy[k, i]
@@ -276,7 +308,7 @@ def Pressure(x, y, u, v, x_arc, y_arc, step=1, rho=1, nu=128/150):
 # %% Forces
 def Forces(x, y, u, v, p, xb, yb, Sb, dr, Angles, chord, nu=128/150):
     """
-    
+    Calculates the pressure & viscous forces acting on a body.
 
     Parameters
     ----------
@@ -519,7 +551,51 @@ def Read_Data(AoAs, start=50, timesteps=100, step=1, verbose=False,
 
 
 # %% make_square
-def make_square(x, y, u, v, vort, square, step, p=None, Mom=None, xOffset=0):
+def make_square(x, y, u, v, vort, square, step=1, p=None, Mom=None, xOffset=0):
+    """
+    Outputs the square fields of given size. With an option to interpolate
+    onto a coarser grid.
+
+    Parameters
+    ----------
+    x : 2D-Array
+        x-Coordinates.
+    y : 2D-Array
+        x-Coordinates.
+    u : 2D-Array
+        Velocity x-component.
+    v : 2D-Array
+        Velocity x-component.
+    vort : 2D-Array
+        Vorticity.
+    square : Int
+        Edge length of desired square.
+    step : int
+        Step size, if > 1 field is interpolated onto coarser grid.
+    p : 2D-Array, optional
+        Pressure field. The default is None.
+    Mom : 2D-Array, optional
+        Momentum Error on domain. The default is None.
+    xOffset : int, optional
+        Square offset from origin. The default is 0.
+
+    Returns
+    -------
+    x_square : 2D-Array
+        x-Coordinates..
+    y_square : 2D-Array
+        y-Coordinates..
+    u_square : 2D-Array
+        Velocity x-component.
+    v_square : 2D-Array
+        Velocity y-component.
+    vort_square : 2D-Array
+        Vorticity.
+    p_square : 2D-Array, Optional
+        Pressure field.
+    Mom_square : 2D-Array, Optional
+        Momentum Error.
+    """
     
     # size0 = int(square/step)
     
@@ -527,7 +603,6 @@ def make_square(x, y, u, v, vort, square, step, p=None, Mom=None, xOffset=0):
 
     size0 = int(np.sqrt(np.sum(mask)))
     
-    # TODO change order
     vort_square = vort[:, mask].reshape((len(u), size0, size0))
     
     x_square = x[mask].reshape((size0, size0))
@@ -566,6 +641,7 @@ def make_square(x, y, u, v, vort, square, step, p=None, Mom=None, xOffset=0):
 @njit(parallel=True)
 def u_omega(x, y, xi, yi, omega, h):
     """
+    calculates the velocities induced by a vorticity field.
     
     Parameters
     ----------
@@ -618,6 +694,7 @@ def u_omega(x, y, xi, yi, omega, h):
 
 def u_omega_nojit(x, y, xi, yi, omega, h):
     """
+    Same as above, no njit used as it can lead to problems in certain cases.
     
     Parameters
     ----------
@@ -667,52 +744,27 @@ def u_omega_nojit(x, y, xi, yi, omega, h):
         print('u is 0')
     return u, v
 
-# %%
-# @njit(parallel=True)
-def u_indu(x, y, xi, yi, omega, h, cell=1):
-    """
-    
-    Parameters
-    ----------
-    x : Vector
-        x-location of points to be evaluated.
-    y : Vector
-        y-location of points to be evaluated.
-    xi : Vector
-        x-location of point with non-negligible vorticity.
-    yi : Vector
-        y-location of point with non-negligible vorticity.
-    omega : Vector
-        Vorticity as above specified points.
-    h : Scalar
-        Step size.
-
-    Returns
-    -------
-    u : Vector
-        induced velocity in x-direction at evaluated points.
-    v : Vector
-        induced velocity in x-direction at evaluated points
-
-    """
-    u, v = np.zeros_like(x), np.zeros_like(x)
-    for i in prange(len(xi)):
-        xp = xi[i]
-        yp = yi[i]
-        op = omega[i]
-        rx, ry = x-xp, y-yp
-        r = np.sqrt(rx**2 + ry**2) / cell
-        a = op/(rx**2 + ry**2 + 0.5*h**2) # +.5h**2 to avoid division by zero
-        a[r<1] = (op * r[r<1]) / cell**2
-        u += -a*ry
-        v += a*rx
-    u = u*h**2 / (2*np.pi)
-    v = v*h**2 / (2*np.pi)
-    return u, v
 
 # %% Gen_Arc
 
 def Gen_Arc(alpha):
+    """
+    Outputs the coordinates of an arc at the same position as in the
+    example problem.
+
+    Parameters
+    ----------
+    alpha : int
+        Angle of Attack.
+
+    Returns
+    -------
+    x: 1D-Array
+        x-coordinates of Arc.
+    y: 1D-Array
+        y-coordinates of Arc.
+
+    """
     alpharad = np.deg2rad(-alpha)
 
     dr = 5
