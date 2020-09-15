@@ -9,6 +9,8 @@ import scipy.sparse as sparse
 from scipy.sparse import linalg
 from scipy.linalg import solve_banded
 import time
+from numba import njit
+from numba import prange
 
 
 def Gradient(field, direction, d=1):
@@ -41,29 +43,34 @@ def Gradient(field, direction, d=1):
         for i in range(0, size[0]):
             for j in range(1, size[1]-1):
                 gradient[i, j] = (field[i, j+1] - field[i, j-1]) / (2*d)
-                gradient[i, 0] = (field[i, 1] - field[i, 0]) / (d)
-                gradient[i, -1] = (field[i, -1] - field[i, -2]) / (d)
+            gradient[i, 0] = (field[i, 1] - field[i, 0]) / (d)
+            gradient[i, -1] = (field[i, -1] - field[i, -2]) / (d)
     elif direction == 1:
         for i in range(1, size[0]-1):
             for j in range(0, size[1]):
                 gradient[i, j] = (field[i-1, j] - field[i+1, j]) / (2*d)
-                gradient[0, j] = (field[0, j] - field[1, j]) / d
-                gradient[-1, j] = (field[-2, j] - field[-1, j]) / d
+            gradient[0, j] = (field[0, j] - field[1, j]) / d
+            gradient[-1, j] = (field[-2, j] - field[-1, j]) / d
     else:
         print('Invalid Direction')
     return gradient
 
 
-def Continuity(u, v):
+# @njit(parallel=True)
+def Continuity(u, v, x, y):
     """
     Calculation of the continuity error in a 2D flow field
 
     Parameters
     ----------
-    dudx : NxM array
-        Derivative of u in x on each grid point.
-    dvdy : NxM array
-        Derivative of v in y on each grid point.
+    u:  MxN Array
+        u-velocity matrix
+    v:  MxN Array
+        v-velocity matrix
+    x:  Nx1 vector
+        x-coordinates of points
+    y:  Mx1 vector
+        y-coordinates of points
 
     Returns
     -------
@@ -75,17 +82,16 @@ def Continuity(u, v):
         print('Fields have different sizes')
         return None
     else:
-        dudx = Gradient(u, 0)
-        dvdy = Gradient(v, 1)
-        n = len(dudx)
-        error = np.zeros([n, n])
-        for i in range(n):
-            for j in range(n):
-                error[i, j] = dudx[i, j] + dvdy[i, j]
+        error = abs(np.divide((u[:-1, 1:] - u[:-1, :-1]),\
+                    np.gradient(x, axis=1)[:-1, :-1])\
+          +np.divide(v[1:, :-1] - v[:-1, :-1],\
+                    np.gradient(y, axis=0)[:-1, :-1]))
+    error = np.pad(error, ((0, 1),), constant_values=0)
     return error
 
 
-def Momentum(vort, u, v):
+# @njit  # (parallel=True)
+def Momentum(vort, u, v, dx, dy):
     """
     Calculation of the momentum error in a 2D flow field
 
@@ -97,6 +103,10 @@ def Momentum(vort, u, v):
         u-velocity value on each grid point.
     v : NxM array
         v-velocity value on each grid point.
+    x:  Mx1 array
+        half cell sizes in x direction
+    y:  Nx1 array
+        half cell sizes in y direction
 
     Returns
     -------
@@ -107,20 +117,122 @@ def Momentum(vort, u, v):
     nu = 1.05e-6
     if not (np.shape(vort) == np.shape(u) and np.shape(vort) == np.shape(v)):
         print('Shape mismatch')
-        return np.infty
+        return None
     else:
-        s = np.shape(vort)
-        vortx1 = Gradient(vort, 0, 1)
-        vortx2 = Gradient(vort, 1, 1)
-        vortxx1 = Gradient(vortx1, 0, 1)
-        vortxx2 = Gradient(vortx2, 1, 1)
-        error = np.zeros_like(vort)
-        for i in range(s[0]):
-            for j in range(s[1]):
-                error[i, j] = u[i, j] * vortx1[i, j] + v[i, j]*vortx2[i, j] \
-                    - nu*(vortxx1[i, j]+vortxx2[i, j])
+       # Vorticity Gradient x
+       vortx = np.zeros_like(vort)
+       vortxx = np.zeros_like(vortx)
+       vortx[:, -1] = np.divide(vort[:, -1]-vort[:, -2], dx[-1]+dx[-2])
+       for i in range(vort.shape[1]-1):
+           vortx[:, i] = (np.divide(vort[:, i+1]*dx[i] - vort[:, i]*dx[i+1],
+                                    dx[i]+dx[i+1])
+                          -np.divide(vort[:, i]*dx[i-1] - vort[:, i-1]*dx[i],
+                                     dx[i]+dx[i-1])) / 2*dx[i]
+       vortxx[:, -1] = np.divide(vortx[:, -1]-vortx[:, -2], dx[-1]+dx[-2])
+       for i in range(vortx.shape[1]-1):
+            vortxx[:, i] = (np.divide(vortx[:, i+1]*dx[i] - vortx[:, i]*dx[i+1],
+                                      dx[i]+dx[i+1])
+                           -np.divide(vortx[:, i]*dx[i-1] - vortx[:, i-1]*dx[i],
+                                      dx[i]+dx[i-1])) / 2*dx[i]
+        
+       # Vorticity Gradient y
+       vorty = np.zeros_like(vort)
+       vortyy = np.zeros_like(vortx)
+       vorty[-1, :] = np.divide(vort[-1, :]-vort[-2, :], dy[-1]+dy[-2])
+       for i in range(vort.shape[0]-1):
+           vorty[i, :] = (np.divide(vort[i+1, :]*dy[i] - vort[i, :]*dy[i+1],
+                                    dy[i]+dy[i+1])
+                          -np.divide(vort[i, :]*dy[i-1] - vort[i-1, :]*dy[i],
+                                     dy[i]+dy[i-1])) / 2*dy[i]
+       vortyy[-1, :] = np.divide(vorty[-1, :]-vorty[-2, :], dy[-1]+dy[-2])
+       for i in range(vorty.shape[0]-1):
+           vortyy[i, :] = (np.divide(vorty[i+1, :]*dy[i] - vorty[i, :]*dy[i+1],
+                                    dy[i]+dy[i+1])
+                          -np.divide(vorty[i, :]*dy[i-1] - vorty[i-1, :]*dy[i],
+                                     dy[i]+dy[i-1])) / 2*dy[i]
+
+       t1 = np.multiply(u, vortx)
+       t2 = np.multiply(v, vorty)
+       t3 = nu * (vortxx+vortyy)
+       error = abs(np.subtract(t1+t2, t3))
     return error
 
+def CellSizes(x, y):
+    """
+    Calculates the distance from cell centre to cell face in either direction
+
+    Parameters
+    ----------
+    x : Mx1 Array
+        x-Coordinates of cell centers.
+    y : Nx1 Array
+        y-Coordinates of cell centers.
+
+    Returns
+    -------
+    dx : Mx1 Array
+        x-distance cell centre-face.
+    dy : Nx1
+        y-distance cell centre-face.
+
+    """
+    # Calcuating Cell sizes x-direction
+    first = np.where(np.gradient(x) == 1)[0][0]
+    last = np.where(np.gradient(x) == 1)[0][-1]
+    dx = np.ones_like(x)*.5
+    for i in np.linspace(first-1, 0, first, dtype=int):
+        dx[i] = x[i+1] - x[i] - dx[i+1]
+    for i in range(last, x.shape[0]):
+        dx[i] = x[i] - x[i-1] - dx[i-1]
+    
+    # Calculating cell sizes in y-direction
+    first = np.where(np.gradient(y) == 1)[0][0]
+    last = np.where(np.gradient(y) == 1)[0][-1]
+    dy = np.ones_like(y)*.5
+    for i in np.linspace(first-1, 0, first, dtype=int):
+        dy[i] = y[i+1] - y[i] - dy[i+1]
+    
+    for i in range(last, y.shape[0]):
+        dy[i] = y[i] - y[i-1] -dy[i-1]
+    return dx, dy
+
+def Vorticity(u, v, dx, dy):
+    """
+    Calculates the Vorticity from velocity Components and Cell sizes
+
+    Parameters
+    ----------
+    u : TYPE
+        DESCRIPTION.
+    v : TYPE
+        DESCRIPTION.
+    dx : TYPE
+        DESCRIPTION.
+    dy : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    vort : TYPE
+        DESCRIPTION.
+
+    """
+
+    # Gradient v-velocity
+    dvdx = np.zeros_like(v)
+    for i in range(1, v.shape[1]-1):
+        vpl = np.divide(v[:, i]*dx[i+1] + v[:, i+1]*dx[i], dx[i]+dx[i+1])
+        vmi = np.divide(v[:, i]*dx[i-1] + v[:, i-1]*dx[i], dx[i-1]+dx[i])
+        dvdx[:, i] = np.divide(vpl - vmi, 2*dx[i])
+    # Gradient u-velocity
+    dudy = np.zeros_like(u)
+    for i in range(1, u.shape[0]-1):
+        upl = np.divide(u[i, :]*dy[i+1] + u[i+1, :]*dy[i], dy[i]+dy[i+1])
+        umi = np.divide(u[i, :]*dy[i-1] + u[i-1, :]*dy[i], dy[i]+dy[i-1])
+        dudy[i, :] = np.divide(upl-umi, 2*dy[i])
+        
+    vort = dvdx - dudy
+    return vort
 
 def solve_Poisson(vort, u_top, u_bot, v_left, v_right, h=1):
     size = vort.shape
